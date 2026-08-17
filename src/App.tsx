@@ -114,7 +114,7 @@ export const App: React.FC = () => {
       });
   }
 
-  function handleClearCompleted() {
+  async function handleClearCompleted() {
     const completedTodos = todos.filter(todo => todo.completed);
 
     if (completedTodos.length === 0) {
@@ -127,22 +127,26 @@ export const App: React.FC = () => {
 
     setLoadingTodoIds(prevIds => [...prevIds, ...completedIds]);
 
-    completedTodos.forEach(todo =>
-      deleteTodo(todo.id)
-        .then(() => {
-          setTodos(prevTodos => prevTodos.filter(item => item.id !== todo.id));
-        })
-        .catch(() => {
-          setErrorMessage(ErrorMessage.Delete);
-        })
-        .finally(() => {
-          setLoadingTodoIds(prevIds => prevIds.filter(id => id !== todo.id));
-        }),
-    );
-
-    setTimeout(() => {
-      inputRef.current?.focus();
-    }, 0);
+    try {
+      await Promise.all(
+        completedTodos.map(todo =>
+          deleteTodo(todo.id).then(() => {
+            setTodos(prevTodos =>
+              prevTodos.filter(item => item.id !== todo.id),
+            );
+          }),
+        ),
+      );
+    } catch {
+      setErrorMessage(ErrorMessage.Delete);
+    } finally {
+      setLoadingTodoIds(prevIds =>
+        prevIds.filter(id => !completedIds.includes(id)),
+      );
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
+    }
   }
 
   function handleUpdateTodo(updatedTodo: Todo) {
@@ -171,16 +175,22 @@ export const App: React.FC = () => {
       });
   }
 
-  function toggleTodos() {
+  async function toggleTodos() {
     setErrorMessage('');
 
     const isAllCompleted = todos.every(todo => todo.completed);
     const targetStatus = !isAllCompleted;
     const todoUpdate = todos.filter(todo => todo.completed !== targetStatus);
 
-    todoUpdate.forEach(todo => {
-      handleUpdateTodo({ ...todo, completed: targetStatus });
-    });
+    try {
+      const updatePromises = todoUpdate.map(todo =>
+        handleUpdateTodo({ ...todo, completed: targetStatus }),
+      );
+
+      await Promise.all(updatePromises);
+    } catch (error) {
+      setErrorMessage(ErrorMessage.Update);
+    }
   }
 
   if (!USER_ID) {
